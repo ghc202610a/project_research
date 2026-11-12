@@ -46,6 +46,8 @@ def resolve_repository(value: str) -> RepositoryRef:
         host = (parsed.hostname or "").lower()
         if host not in GITHUB_HOSTS:
             raise ValueError("only github.com repository URLs are supported by the initial adapter")
+        if parsed.username or parsed.password or parsed.port not in (None, 80, 443):
+            raise ValueError("repository URL must not contain credentials or a nonstandard port")
         parts = [unquote(part) for part in parsed.path.split("/") if part]
         if len(parts) < 2:
             raise ValueError("URL does not contain an owner and repository")
@@ -111,7 +113,8 @@ class GitHubClient:
 
     def get_repository(self, repository: RepositoryRef) -> RepositoryRef:
         payload, _ = self.get_json(f"{API_ROOT}/repos/{repository.owner}/{repository.name}")
-        owner = (payload.get("owner") or {}).get("login") or repository.owner
+        owner_payload = payload.get("owner")
+        owner = (owner_payload.get("login") if isinstance(owner_payload, dict) else None) or repository.owner
         name = payload.get("name") or repository.name
         return replace(repository, owner=owner, name=name, native_id=int(payload["id"]),
                        html_url=payload.get("html_url") or repository.html_url)
@@ -145,9 +148,12 @@ class GitHubClient:
                 if not isinstance(item, dict):
                     continue
                 commit = item.get("commit") or {}
+                tag_name = str(item.get("name") or "")
+                if not tag_name:
+                    continue
                 records.append(TagRecord(
                     provider="github", repository_key=repository.key,
-                    name=str(item.get("name") or ""), commit_sha=commit.get("sha"),
+                    name=tag_name, commit_sha=commit.get("sha"),
                     zipball_url=item.get("zipball_url"), tarball_url=item.get("tarball_url"),
                     retrieved_at=retrieved, raw=item))
             pages += 1
@@ -187,6 +193,16 @@ class GitHubClient:
         return digest.hexdigest(), total
 
 
+class _GitHubAPIRedirectHandler(HTTPRedirectHandler):
+    """Allow API redirects only within the authenticated GitHub API origin."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        parsed = urlparse(newurl)
+        if parsed.scheme != "https" or parsed.hostname != "api.github.com" or parsed.port not in (None, 443) or parsed.username or parsed.password:
+            raise GitHubError("GitHub API returned an unsafe redirect")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
 class _GitHubAssetRedirectHandler(HTTPRedirectHandler):
     """Drop bearer credentials when GitHub redirects an asset to another host."""
 
@@ -194,8 +210,12 @@ class _GitHubAssetRedirectHandler(HTTPRedirectHandler):
         redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
         if redirected is None:
             return None
-        old_host = urlparse(req.full_url).hostname
-        new_host = urlparse(newurl).hostname
+        old_url = urlparse(req.full_url)
+        new_url = urlparse(newurl)
+        if new_url.scheme != "https" or not new_url.hostname or new_url.username or new_url.password:
+            raise GitHubError("GitHub returned an unsafe asset redirect")
+        old_host = (old_url.hostname or "").lower()
+        new_host = new_url.hostname.lower()
         if old_host != new_host:
             redirected.remove_header("Authorization")
             redirected.unredirected_hdrs.pop("Authorization", None)
@@ -206,7 +226,7 @@ class _GitHubAssetRedirectHandler(HTTPRedirectHandler):
 def _urlopen_transport(url: str, headers: dict[str, str], timeout: float) -> HttpResponse:
     request = Request(url, headers=headers)
     try:
-        with urlopen(request, timeout=timeout) as response:
+        with build_opener(_GitHubAPIRedirectHandler()).open(request, timeout=timeout) as response:
             body = response.read(MAX_API_RESPONSE_BYTES + 1)
             if len(body) > MAX_API_RESPONSE_BYTES:
                 raise GitHubError(f"GitHub API response exceeded {MAX_API_RESPONSE_BYTES} bytes")

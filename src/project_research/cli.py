@@ -137,10 +137,12 @@ def _run(args: argparse.Namespace) -> int:
                     cached_count += sum(1 for result in results if result.status == "cached")
                     remaining -= sum(result.size or 0 for result in results if result.status == "downloaded")
                 print(f"Downloaded {media_count} embedded image(s); reused {cached_count} cached image(s); total limit {args.max_total_image_bytes} bytes")
-            release_tags = {release.tag_name for release in releases}
+            release_tags = {release.tag_name for release in releases if not release.draft}
             unmatched_tags = sum(1 for tag in tags if tag.name not in release_tags)
             print(f"Synced {len(releases)} releases and {len(tags)} tags from {repository.full_name}")
             print(f"Tags without published releases: {unmatched_tags}")
+            if args.max_pages is not None:
+                print("Collection page cap is active; treat this result as potentially incomplete.")
             print(f"Database: {store.path}")
         return 0
 
@@ -159,7 +161,7 @@ def _run(args: argparse.Namespace) -> int:
                 if args.per_release:
                     if args.format != "md":
                         raise ValueError("--per-release is supported only with --format md")
-                    written = write_per_release_markdown(args.output, repository, releases)
+                    write_per_release_markdown(args.output, repository, releases)
                     print(f"Wrote {len(releases)} per-release Markdown files and an index under {args.output}")
                 else:
                     write_export(args.output, args.format, repository, releases)

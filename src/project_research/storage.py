@@ -16,7 +16,7 @@ SCHEMA_VERSION = 1
 
 
 def default_database_path() -> Path:
-    root = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    root = Path(os.environ.get("XDG_DATA_HOME") or (Path.home() / ".local" / "share"))
     return root / "project-research" / "releases.sqlite3"
 
 
@@ -209,6 +209,7 @@ class ReleaseStore:
 
     def save_tags(self, repository: RepositoryRef, tags: list[TagRecord], synced_at: str) -> None:
         with self.transaction():
+            self.upsert_repository(repository, synced_at)
             for tag in tags:
                 self.connection.execute("""
                     INSERT INTO tags(repository_key,name,commit_sha,zipball_url,tarball_url,retrieved_at,raw_json)
@@ -221,10 +222,10 @@ class ReleaseStore:
 
     def list_tags(self, repository_key: str) -> list[dict[str, object]]:
         rows = self.connection.execute("""
-            SELECT t.*, CASE WHEN r.tag_name IS NULL THEN 0 ELSE 1 END AS has_release
-            FROM tags t LEFT JOIN releases r
-              ON r.repository_key=t.repository_key AND r.tag_name=t.name
-            WHERE t.repository_key=? ORDER BY t.name
+            SELECT t.*, CASE WHEN EXISTS (
+                SELECT 1 FROM releases r WHERE r.repository_key=t.repository_key AND r.tag_name=t.name AND r.draft=0
+            ) THEN 1 ELSE 0 END AS has_release
+            FROM tags t WHERE t.repository_key=? ORDER BY t.name
         """, (repository_key,)).fetchall()
         return [dict(row) for row in rows]
 

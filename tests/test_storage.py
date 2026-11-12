@@ -43,6 +43,17 @@ class StorageTests(unittest.TestCase):
                 rows = {row["name"]: row["has_release"] for row in store.list_tags(repo.key)}
                 self.assertEqual(rows, {"v1.2.0": 1, "v1.3.0": 0})
 
+    def test_draft_release_does_not_mark_tag_as_published(self):
+        from dataclasses import replace
+        from project_research.models import TagRecord
+        with tempfile.TemporaryDirectory() as tmp:
+            with ReleaseStore(Path(tmp) / "test.sqlite3") as store:
+                repo = repository()
+                draft = replace(release(tag="v1.2.0"), draft=True)
+                store.save_releases(repo, [draft], draft.retrieved_at)
+                store.save_tags(repo, [TagRecord("github", repo.key, "v1.2.0", "aaa", None, None)], draft.retrieved_at)
+                self.assertEqual(store.list_tags(repo.key)[0]["has_release"], 0)
+
     def test_changed_raw_payload_adds_observation(self):
         from dataclasses import replace
         with tempfile.TemporaryDirectory() as tmp:

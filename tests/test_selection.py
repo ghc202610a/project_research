@@ -38,6 +38,10 @@ class SelectionTests(unittest.TestCase):
                     release(native_id=4, tag="v3.1.0", published="2025-02-01T00:00:00Z")]
         self.assertEqual({r.native_id for r in select_releases(releases)}, {2, 3, 4})
 
+    def test_rejects_pathological_version_components(self):
+        with self.assertRaises(ValueError):
+            compare_versions("1" * 100, "1.0")
+
     def test_invalid_bounds(self):
         with self.assertRaises(ValueError):
             select_releases([release()], since="not-a-date")

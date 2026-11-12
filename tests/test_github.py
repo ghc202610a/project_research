@@ -1,7 +1,7 @@
 import json
 import unittest
 
-from project_research.github import GitHubClient, GitHubError, HttpResponse, resolve_repository, _GitHubAssetRedirectHandler
+from project_research.github import GitHubClient, GitHubError, HttpResponse, resolve_repository, _GitHubAssetRedirectHandler, _GitHubAPIRedirectHandler
 from urllib.request import Request
 from tests.helpers import repository, release_payload
 
@@ -19,6 +19,10 @@ class GitHubTests(unittest.TestCase):
             resolve_repository("https://github.com/octo")
         with self.assertRaises(ValueError):
             resolve_repository("octo?query/demo")
+        with self.assertRaises(ValueError):
+            resolve_repository("https://user@github.com/octo/demo")
+        with self.assertRaises(ValueError):
+            resolve_repository("https://github.com:8443/octo/demo")
 
     def test_pagination(self):
         calls = []
@@ -44,6 +48,14 @@ class GitHubTests(unittest.TestCase):
         payload, _ = client.get_json("https://api.github.com/example")
         self.assertEqual(payload, {"ok": True})
         self.assertEqual(len(calls), 2)
+
+    def test_api_redirect_must_remain_on_api_origin(self):
+        request = Request("https://api.github.com/repos/octo/demo", headers={"Authorization": "Bearer secret"})
+        handler = _GitHubAPIRedirectHandler()
+        with self.assertRaises(GitHubError):
+            handler.redirect_request(request, None, 302, "Found", {}, "https://attacker.example/collect")
+        redirected = handler.redirect_request(request, None, 301, "Moved", {}, "https://api.github.com/repos/octo/demo-new")
+        self.assertEqual(redirected.get_header("Authorization"), "Bearer secret")
 
     def test_asset_redirect_strips_authorization_across_hosts(self):
         request = Request("https://api.github.com/repos/octo/demo/releases/assets/1",

@@ -75,6 +75,8 @@ def _validate_public_url(url: str) -> None:
 
 class _SafeRedirectHandler(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
+        if urlsplit(req.full_url).scheme == "https" and urlsplit(newurl).scheme != "https":
+            raise ValueError("refusing an HTTPS-to-HTTP image redirect")
         _validate_public_url(newurl)
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
@@ -113,6 +115,14 @@ def _fetch_image(url: str, timeout: float, max_bytes: int) -> tuple[str, bytes]:
         raise OSError(f"network error: {type(exc).__name__}") from exc
 
 
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as source:
+        while block := source.read(1024 * 1024):
+            digest.update(block)
+    return digest.hexdigest()
+
+
 def collect_release_images(body: str | None, destination_root: str | Path, release_id: int, *,
                            repository_key: str = "repository",
                            existing_media: dict[str, dict] | None = None,
@@ -127,9 +137,22 @@ def collect_release_images(body: str | None, destination_root: str | Path, relea
         if cached and cached.get("status") in {"downloaded", "cached"} and cached.get("local_path"):
             cached_path = Path(str(cached["local_path"]))
             if cached_path.is_file():
-                results.append(MediaResult(url, "cached", str(cached_path), cached.get("content_type"),
-                                           cached.get("size"), cached.get("sha256"), "reused prior download"))
-                continue
+                expected_hash = cached.get("sha256")
+                if expected_hash:
+                    digest = _file_sha256(cached_path)
+                    if digest != expected_hash:
+                        media_root = (root / "media").resolve()
+                        if cached_path.resolve().is_relative_to(media_root):
+                            cached_path.unlink(missing_ok=True)
+                        cached = None
+                    else:
+                        results.append(MediaResult(url, "cached", str(cached_path), cached.get("content_type"),
+                                                   cached.get("size"), digest, "reused verified local copy"))
+                        continue
+                else:
+                    results.append(MediaResult(url, "cached", str(cached_path), cached.get("content_type"),
+                                               cached.get("size"), cached.get("sha256"), "reused prior download"))
+                    continue
         if remaining_total_bytes - consumed <= 0:
             results.append(MediaResult(url, "skipped-total-limit", detail="per-sync total image limit reached"))
             continue

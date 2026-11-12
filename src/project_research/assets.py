@@ -48,6 +48,9 @@ def download_asset(client: GitHubClient, repository: RepositoryRef, asset: dict[
     try:
         api_url = f"{API_ROOT}/repos/{repository.owner}/{repository.name}/releases/assets/{int(asset['native_id'])}"
         local_sha, size = client.download_asset(api_url, temp_path, max_bytes=max_bytes)
+        expected_size = asset.get("size")
+        if expected_size is not None and size != int(expected_size):
+            raise AssetDownloadError(f"downloaded size ({size}) does not match provider metadata ({expected_size})")
         publisher_digest = asset.get("digest")
         verified: bool | None = None
         if publisher_digest:

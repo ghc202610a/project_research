@@ -12,16 +12,23 @@ _VERSION_RE = re.compile(r"^[vV]?(\d+(?:\.\d+)*)(?:-([0-9A-Za-z.-]+))?(?:\+[0-9A
 
 
 def _version_parts(value: str) -> tuple[tuple[int, ...], tuple[tuple[int, int | str], ...]] | None:
+    if len(value) > 128:
+        return None
     match = _VERSION_RE.fullmatch(value.strip())
     if not match:
         return None
-    core = tuple(int(part) for part in match.group(1).split("."))
+    core_parts = match.group(1).split(".")
+    if any(len(part) > 18 for part in core_parts):
+        return None
+    core = tuple(int(part) for part in core_parts)
     prerelease = match.group(2)
     if prerelease is None:
         pre: tuple[tuple[int, int | str], ...] = ()
     else:
         pieces: list[tuple[int, int | str]] = []
         for item in prerelease.split("."):
+            if item.isdigit() and len(item) > 18:
+                return None
             pieces.append((0, int(item)) if item.isdigit() else (1, item.lower()))
         pre = tuple(pieces)
     return core, pre

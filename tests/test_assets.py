@@ -39,6 +39,15 @@ class AssetTests(unittest.TestCase):
             self.assertTrue(Path(str(target) + ".provenance.json").exists())
             self.assertTrue(result["publisher_digest_verified"])
 
+    def test_provider_size_mismatch_does_not_publish(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "artifact.bin"
+            with self.assertRaises(AssetDownloadError):
+                download_asset(FakeClient(), repository(),
+                    {"native_id": 9, "name": "artifact.bin", "size": 99},
+                    {"native_id": 7, "tag_name": "v1.2.0"}, target)
+            self.assertFalse(target.exists())
+
     def test_digest_mismatch_does_not_publish(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "artifact.bin"

@@ -41,6 +41,22 @@ class MediaTests(unittest.TestCase):
                                                   existing_media=cached)
             self.assertEqual(results[0].status, "cached")
 
+    def test_corrupt_cached_file_is_not_reused(self):
+        png = b"\x89PNG\r\n\x1a\nimage-data"
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "media" / "namespace" / "release-7" / "cached.png"
+            path.parent.mkdir(parents=True)
+            path.write_bytes(b"corrupt")
+            cached = {"https://example.com/image.png": {"status": "downloaded", "local_path": str(path),
+                      "content_type": "image/png", "size": len(png), "sha256": "0" * 64}}
+            with patch("project_research.media._fetch_image", return_value=("image/png", png)) as fetch:
+                results = collect_release_images("![image](https://example.com/image.png)", tmp, 7,
+                                                  existing_media=cached)
+            fetch.assert_called_once()
+            self.assertEqual(results[0].status, "downloaded")
+            self.assertEqual(Path(results[0].local_path).read_bytes(), png)
+            self.assertFalse(path.exists())
+
     def test_size_limit_is_recorded_not_raised(self):
         with tempfile.TemporaryDirectory() as tmp, patch("project_research.media._fetch_image", side_effect=OverflowError("too big")):
             results = collect_release_images("![image](https://example.com/image.png)", tmp, 7)
