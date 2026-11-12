@@ -10,6 +10,8 @@ from urllib.parse import urlparse, unquote
 from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
 import json
 import os
+import ipaddress
+import socket
 import re
 import time
 
@@ -212,8 +214,7 @@ class _GitHubAssetRedirectHandler(HTTPRedirectHandler):
             return None
         old_url = urlparse(req.full_url)
         new_url = urlparse(newurl)
-        if new_url.scheme != "https" or not new_url.hostname or new_url.username or new_url.password:
-            raise GitHubError("GitHub returned an unsafe asset redirect")
+        _validate_public_asset_redirect(newurl)
         old_host = (old_url.hostname or "").lower()
         new_host = new_url.hostname.lower()
         if old_host != new_host:
@@ -221,6 +222,22 @@ class _GitHubAssetRedirectHandler(HTTPRedirectHandler):
             redirected.unredirected_hdrs.pop("Authorization", None)
             redirected.headers.pop("Authorization", None)
         return redirected
+
+
+def _validate_public_asset_redirect(url: str) -> None:
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+        raise GitHubError("GitHub returned an unsafe asset redirect")
+    try:
+        addresses = [ipaddress.ip_address(parsed.hostname)]
+    except ValueError:
+        try:
+            addresses = [ipaddress.ip_address(item[4][0]) for item in socket.getaddrinfo(
+                parsed.hostname, parsed.port or 443, type=socket.SOCK_STREAM)]
+        except OSError as exc:
+            raise GitHubError("GitHub asset redirect host could not be resolved safely") from exc
+    if not addresses or any(not address.is_global for address in addresses):
+        raise GitHubError("GitHub asset redirect resolved to a non-public network address")
 
 
 def _urlopen_transport(url: str, headers: dict[str, str], timeout: float) -> HttpResponse:

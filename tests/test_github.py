@@ -61,9 +61,16 @@ class GitHubTests(unittest.TestCase):
         request = Request("https://api.github.com/repos/octo/demo/releases/assets/1",
                           headers={"Authorization": "Bearer secret", "Accept": "application/octet-stream"})
         redirected = _GitHubAssetRedirectHandler().redirect_request(
-            request, None, 302, "Found", {}, "https://objects.githubusercontent.com/asset")
+            request, None, 302, "Found", {}, "https://8.8.8.8/asset")
         self.assertIsNone(redirected.get_header("Authorization"))
         self.assertEqual(redirected.get_header("Accept"), "application/octet-stream")
+
+    def test_asset_redirect_blocks_private_networks(self):
+        request = Request("https://api.github.com/repos/octo/demo/releases/assets/1",
+                          headers={"Authorization": "Bearer secret"})
+        with self.assertRaises(GitHubError):
+            _GitHubAssetRedirectHandler().redirect_request(
+                request, None, 302, "Found", {}, "https://127.0.0.1/internal")
 
     def test_rejects_unsafe_pagination_target(self):
         def transport(url, headers, timeout):
