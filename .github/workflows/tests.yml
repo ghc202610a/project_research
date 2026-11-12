@@ -23,5 +23,10 @@ jobs:
         run: python -m pip install .
       - name: Compile
         run: python -m compileall -q src tests
+      - name: CLI smoke test
+        run: |
+          project-research --version
+          project-research --help
+          project-research sync --help
       - name: Run offline tests
         run: python -m unittest discover -v
