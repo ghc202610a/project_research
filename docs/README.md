@@ -9,6 +9,7 @@ These documents describe intended direction, architecture, implementation bounda
 - [Roadmap](ROADMAP.md): staged implementation direction.
 - [Concepts to explore](CONCEPTS_TO_EXPLORE.md): research topics, not requirements.
 - [PR1 scope](PR1_SCOPE.md): first implementation increment and exclusions.
+- [Release tracker implementation](RELEASE_TRACKER.md): commands, storage, provenance, limits, and current limitations.
 - [Agent guide](AGENT_GUIDE.md): contributor and coding-agent expectations.
 - [Architecture decisions](adr/README.md): recorded decisions.
 

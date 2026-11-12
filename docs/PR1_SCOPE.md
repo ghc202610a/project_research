@@ -1,7 +1,11 @@
 # PR1 scope: release-tracker foundation
 
+## Status
+
+This is the agreed scope for the first release-tracker increment. Implementation details and known limitations are tracked in [RELEASE_TRACKER.md](RELEASE_TRACKER.md).
+
 ## Purpose and user outcome
-Deliver the first practical vertical capability while establishing limited architecture seams that avoid GitHub-specific domain logic. Given a repository URL (including a nested GitHub URL) or owner/repository identifier, a user can collect and inspect GitHub releases, select historical ranges, preserve descriptions and metadata, generate archives, search release text, and explicitly download a selected asset with integrity checks where supported.
+Deliver the first practical vertical capability while establishing limited architecture seams that avoid GitHub-specific domain logic. Given a repository URL (including a nested GitHub URL) or owner/repository identifier, a user can collect and inspect GitHub releases and tags, select historical ranges, preserve descriptions and metadata, generate archives, search release text, and explicitly download a selected asset with integrity checks where supported.
 
 The tool works through a conventional CLI without an LLM or hosted service.
 
@@ -11,7 +15,7 @@ The tool works through a conventional CLI without an LLM or hosted service.
 - Accept GitHub repository URLs, nested URLs, and owner/repo notation.
 - Use GitHub REST API through a provider adapter.
 - Support GH_TOKEN and GITHUB_TOKEN; never print or persist credentials.
-- Retrieve paginated releases and embedded asset metadata.
+- Retrieve paginated releases, Git tags, and embedded asset metadata.
 - Preserve raw payloads and normalized records.
 - Handle errors, pagination, rate limits, and conservative retries.
 - Distinguish published releases from tags without releases.
@@ -35,7 +39,7 @@ The tool works through a conventional CLI without an LLM or hosted service.
 ### Artifact inventory and explicit retrieval
 - Index asset name, URL, size, content type, timestamps, publisher digest where available.
 - No bulk binary downloads by default.
-- Explicit asset selection/download; tentative command name evince needs review because of GNOME document viewer name collision.
+- Explicit asset selection/download using `project-research asset download`.
 - Reject ambiguous matches; validate destination paths and filenames.
 - Stream to temporary files, enforce limits, compute local SHA-256, verify publisher digest when supplied, atomically publish verified files.
 - Write provenance sidecar. Never automatically extract or execute artifacts.

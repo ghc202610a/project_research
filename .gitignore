@@ -218,3 +218,11 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# project_research local state and generated release archives
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+/media/
+/downloads/
+/release-files/
