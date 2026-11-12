@@ -32,7 +32,8 @@ class MediaTests(unittest.TestCase):
         png = b"\x89PNG\r\n\x1a\nimage-data"
         import hashlib
         with tempfile.TemporaryDirectory() as tmp:
-            path = Path(tmp) / "cached.png"
+            path = Path(tmp) / "media" / "namespace" / "release-7" / "cached.png"
+            path.parent.mkdir(parents=True)
             path.write_bytes(png)
             cached = {"https://example.com/image.png": {"status": "downloaded", "local_path": str(path),
                       "content_type": "image/png", "size": len(png), "sha256": hashlib.sha256(png).hexdigest()}}
