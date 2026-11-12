@@ -49,6 +49,18 @@ class GitHubTests(unittest.TestCase):
         self.assertEqual(payload, {"ok": True})
         self.assertEqual(len(calls), 2)
 
+    def test_secondary_rate_limit_429_retries(self):
+        calls = []
+        def transport(url, headers, timeout):
+            calls.append(url)
+            if len(calls) == 1:
+                return HttpResponse(429, {"retry-after": "0"}, b'{"message":"secondary rate limit"}')
+            return HttpResponse(200, {}, b'{"ok":true}')
+        client = GitHubClient(transport=transport, sleep=lambda _: None)
+        payload, _ = client.get_json("https://api.github.com/example")
+        self.assertEqual(payload, {"ok": True})
+        self.assertEqual(len(calls), 2)
+
     def test_api_redirect_must_remain_on_api_origin(self):
         request = Request("https://api.github.com/repos/octo/demo", headers={"Authorization": "Bearer secret"})
         handler = _GitHubAPIRedirectHandler()
