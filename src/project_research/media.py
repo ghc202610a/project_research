@@ -129,22 +129,22 @@ def collect_release_images(body: str | None, destination_root: str | Path, relea
                            max_file_bytes: int = 8 * 1024 * 1024,
                            remaining_total_bytes: int = 24 * 1024 * 1024,
                            timeout: float = 20.0) -> list[MediaResult]:
-    root = Path(destination_root)
+    root = Path(destination_root).resolve()
+    media_root = (root / "media").resolve()
     results: list[MediaResult] = []
     consumed = 0
     for url in extract_image_urls(body):
         cached = (existing_media or {}).get(url)
         if cached and cached.get("status") in {"downloaded", "cached"} and cached.get("local_path"):
             cached_path = Path(str(cached["local_path"]))
-            if cached_path.is_file():
+            safe_cached_path = (not cached_path.is_symlink() and cached_path.is_file()
+                                and cached_path.resolve().is_relative_to(media_root))
+            if safe_cached_path:
                 expected_hash = cached.get("sha256")
                 if expected_hash:
                     digest = _file_sha256(cached_path)
                     if digest != expected_hash:
-                        media_root = (root / "media").resolve()
-                        if cached_path.resolve().is_relative_to(media_root):
-                            cached_path.unlink(missing_ok=True)
-                        cached = None
+                        cached_path.unlink(missing_ok=True)
                     else:
                         results.append(MediaResult(url, "cached", str(cached_path), cached.get("content_type"),
                                                    cached.get("size"), digest, "reused verified local copy"))
@@ -167,6 +167,13 @@ def collect_release_images(body: str | None, destination_root: str | Path, relea
             namespace = hashlib.sha256(repository_key.encode("utf-8")).hexdigest()[:16]
             target = root / "media" / namespace / f"release-{release_id}" / f"{digest}{extension}"
             target.parent.mkdir(parents=True, exist_ok=True)
+            if target.is_symlink():
+                target.unlink()
+            elif target.exists():
+                if not target.is_file():
+                    raise OSError("media destination exists and is not a regular file")
+                if _file_sha256(target) != digest:
+                    target.unlink()
             if not target.exists():
                 fd, temporary = tempfile.mkstemp(prefix=f".{digest}.", suffix=".part", dir=target.parent)
                 try:

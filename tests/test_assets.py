@@ -39,6 +39,19 @@ class AssetTests(unittest.TestCase):
             self.assertTrue(Path(str(target) + ".provenance.json").exists())
             self.assertTrue(result["publisher_digest_verified"])
 
+    def test_predictable_sidecar_temp_symlink_is_not_followed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "artifact.bin"
+            outside = Path(tmp) / "outside.txt"
+            outside.write_text("keep this", encoding="utf-8")
+            predictable_temp = Path(str(target) + ".provenance.json.tmp")
+            predictable_temp.symlink_to(outside)
+            download_asset(FakeClient(), repository(),
+                {"native_id": 9, "name": "artifact.bin"},
+                {"native_id": 7, "tag_name": "v1.2.0"}, target)
+            self.assertEqual(outside.read_text(encoding="utf-8"), "keep this")
+            self.assertTrue(predictable_temp.is_symlink())
+
     def test_provider_size_mismatch_does_not_publish(self):
         with tempfile.TemporaryDirectory() as tmp:
             target = Path(tmp) / "artifact.bin"

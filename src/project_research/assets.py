@@ -80,9 +80,19 @@ def download_asset(client: GitHubClient, repository: RepositoryRef, asset: dict[
             "publisher_digest_verified": verified,
         }
         sidecar_path = target.with_name(target.name + ".provenance.json")
-        sidecar_tmp = sidecar_path.with_name(sidecar_path.name + ".tmp")
-        sidecar_tmp.write_text(json.dumps(sidecar, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
-        os.replace(sidecar_tmp, sidecar_path)
+        sidecar_fd, sidecar_tmp_name = tempfile.mkstemp(
+            prefix=f".{sidecar_path.name}.", suffix=".tmp", dir=sidecar_path.parent)
+        sidecar_tmp = Path(sidecar_tmp_name)
+        try:
+            with os.fdopen(sidecar_fd, "w", encoding="utf-8") as sidecar_file:
+                json.dump(sidecar, sidecar_file, indent=2, ensure_ascii=False)
+                sidecar_file.write("\n")
+                sidecar_file.flush()
+                os.fsync(sidecar_file.fileno())
+            os.replace(sidecar_tmp, sidecar_path)
+        except Exception:
+            sidecar_tmp.unlink(missing_ok=True)
+            raise
         return sidecar
     except Exception:
         temp_path.unlink(missing_ok=True)

@@ -57,6 +57,22 @@ class MediaTests(unittest.TestCase):
             self.assertEqual(Path(results[0].local_path).read_bytes(), png)
             self.assertFalse(path.exists())
 
+    def test_symlinked_cache_path_is_not_trusted(self):
+        png = b"\x89PNG\r\n\x1a\nimage-data"
+        with tempfile.TemporaryDirectory() as tmp:
+            outside = Path(tmp) / "outside.bin"
+            outside.write_bytes(b"do not alter")
+            link = Path(tmp) / "media" / "namespace" / "release-7" / "cached.png"
+            link.parent.mkdir(parents=True)
+            link.symlink_to(outside)
+            cached = {"https://example.com/image.png": {"status": "downloaded", "local_path": str(link),
+                      "content_type": "image/png", "size": len(png), "sha256": "0" * 64}}
+            with patch("project_research.media._fetch_image", return_value=("image/png", png)):
+                results = collect_release_images("![image](https://example.com/image.png)", tmp, 7,
+                                                  existing_media=cached)
+            self.assertEqual(outside.read_bytes(), b"do not alter")
+            self.assertEqual(Path(results[0].local_path).read_bytes(), png)
+
     def test_size_limit_is_recorded_not_raised(self):
         with tempfile.TemporaryDirectory() as tmp, patch("project_research.media._fetch_image", side_effect=OverflowError("too big")):
             results = collect_release_images("![image](https://example.com/image.png)", tmp, 7)
