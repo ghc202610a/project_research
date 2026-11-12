@@ -90,6 +90,10 @@ def select_releases(
 ) -> list[ReleaseRecord]:
     if last is not None and last < 1:
         raise ValueError("--last must be at least 1")
+    if min_version and _version_parts(min_version) is None:
+        raise ValueError(f"invalid minimum version bound: {min_version}")
+    if max_version and _version_parts(max_version) is None:
+        raise ValueError(f"invalid maximum version bound: {max_version}")
     if min_version and max_version and compare_versions(min_version, max_version) > 0:
         raise ValueError("minimum version is greater than maximum version")
     lower_date = _parse_date(since) if since else None

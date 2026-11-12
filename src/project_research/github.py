@@ -7,7 +7,7 @@ from email.utils import parsedate_to_datetime
 from typing import Any, Callable
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse, unquote
-from urllib.request import HTTPRedirectHandler, Request, build_opener, urlopen
+from urllib.request import HTTPRedirectHandler, Request, build_opener
 import json
 import os
 import ipaddress
@@ -273,7 +273,7 @@ def _http_error(status: int, headers: dict[str, str], body: bytes) -> GitHubErro
 
 
 def _is_retryable(status: int, headers: dict[str, str]) -> bool:
-    return status in {500, 502, 503, 504} or (status == 403 and (
+    return status in {429, 500, 502, 503, 504} or (status == 403 and (
         headers.get("x-ratelimit-remaining") == "0" or "retry-after" in headers))
 
 
